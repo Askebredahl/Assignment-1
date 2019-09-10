@@ -45,25 +45,9 @@ N.B. Create a GitHub repository for the Assignment 1 and link it to a project on
 If you're not in a project in Rstudio, make sure to set your working directory here. If you created an RStudio project, then your working directory (the directory with your data and code for these assignments) is the project directory.
 
 ``` r
-pacman::p_load(tidyverse,janitor)
+library(pacman)
+pacman::p_load(tidyverse, janitor, ggplot2)
 ```
-
-    ## Installing package into 'C:/Users/aske/Documents/R/win-library/3.6'
-    ## (as 'lib' is unspecified)
-
-    ## also installing the dependency 'snakecase'
-
-    ## Warning: unable to access index for repository http://www.stats.ox.ac.uk/pub/RWin/bin/windows/contrib/3.6:
-    ##   kan ikke åbne adresse 'http://www.stats.ox.ac.uk/pub/RWin/bin/windows/contrib/3.6/PACKAGES'
-
-    ## package 'snakecase' successfully unpacked and MD5 sums checked
-    ## package 'janitor' successfully unpacked and MD5 sums checked
-    ## 
-    ## The downloaded binary packages are in
-    ##  C:\Users\aske\AppData\Local\Temp\Rtmpchkdtv\downloaded_packages
-
-    ## 
-    ## janitor installed
 
 Load the three data sets, after downloading them from dropbox and saving them in your working directory: \* Demographic data for the participants: <https://www.dropbox.com/s/w15pou9wstgc8fe/demo_train.csv?dl=0> \* Length of utterance data: <https://www.dropbox.com/s/usyauqm37a76of6/LU_train.csv?dl=0> \* Word data: <https://www.dropbox.com/s/8ng1civpl2aux58/token_train.csv?dl=0>
 
@@ -83,13 +67,30 @@ So:
 
 Tip: look through the chapter on data transformation in R for data science (<http://r4ds.had.co.nz>). Alternatively you can look into the package dplyr (part of tidyverse), or google "how to rename variables in R". Or check the janitor R package. There are always multiple ways of solving any problem and no absolute best method.
 
+``` r
+colnames(demo_train)[1] <- "SUBJ"
+colnames(demo_train)[2] <- "VISIT"
+```
+
 2b. Find a way to homogeneize the way "visit" is reported (visit1 vs. 1).
 
 Tip: The stringr package is what you need. str\_extract () will allow you to extract only the digit (number) from a string, by using the regular expression \\d.
 
+``` r
+p_load(stringr)
+LU_train$VISIT <-  str_extract(LU_train$VISIT, "\\d")
+token_train$VISIT <-  str_extract(token_train$VISIT, "\\d")
+```
+
 2c. We also need to make a small adjustment to the content of the Child.ID coloumn in the demographic data. Within this column, names that are not abbreviations do not end with "." (i.e. Adam), which is the case in the other two data sets (i.e. Adam.). If The content of the two variables isn't identical the rows will not be merged. A neat way to solve the problem is simply to remove all "." in all datasets.
 
 Tip: stringr is helpful again. Look up str\_replace\_all Tip: You can either have one line of code for each child name that is to be changed (easier, more typing) or specify the pattern that you want to match (more complicated: look up "regular expressions", but less typing)
+
+``` r
+LU_train$SUBJ <-  str_replace_all(LU_train$SUBJ, "\\.", "")
+token_train$SUBJ <- str_replace_all(token_train$SUBJ, "\\.", "")
+demo_train$SUBJ <- str_replace_all(demo_train$SUBJ, "\\.", "")
+```
 
 2d. Now that the nitty gritty details of the different data sets are fixed, we want to make a subset of each data set only containig the variables that we wish to use in the final data set. For this we use the tidyverse package dplyr, which contains the function select().
 
@@ -100,17 +101,70 @@ Most variables should make sense, here the less intuitive ones. \* ADOS (Autism 
 
 Feel free to rename the variables into something you can remember (i.e. nonVerbalIQ, verbalIQ)
 
+``` r
+sub_demo <- select(demo_train, SUBJ, VISIT, Diagnosis, Ethnicity, Gender, Age, ADOS, MullenRaw, Socialization, ExpressiveLangRaw)
+
+sub_token <- select(token_train, SUBJ, VISIT, types_MOT, types_CHI,  tokens_MOT, tokens_CHI)
+
+sub_LU <- select(LU_train, SUBJ, VISIT,MOT_MLU, CHI_MLU)
+```
+
 2e. Finally we are ready to merge all the data sets into just one.
 
 Some things to pay attention to: \* make sure to check that the merge has included all relevant data (e.g. by comparing the number of rows) \* make sure to understand whether (and if so why) there are NAs in the dataset (e.g. some measures were not taken at all visits, some recordings were lost or permission to use was withdrawn)
+
+``` r
+merged_data1 <- merge(sub_LU, sub_token, all = T)
+merged_data <- merge(merged_data1, sub_demo, all = T)
+```
 
 2f. Only using clinical measures from Visit 1 In order for our models to be useful, we want to miimize the need to actually test children as they develop. In other words, we would like to be able to understand and predict the children's linguistic development after only having tested them once. Therefore we need to make sure that our ADOS, MullenRaw, ExpressiveLangRaw and Socialization variables are reporting (for all visits) only the scores from visit 1.
 
 A possible way to do so: \* create a new dataset with only visit 1, child id and the 4 relevant clinical variables to be merged with the old dataset \* rename the clinical variables (e.g. ADOS to ADOS1) and remove the visit (so that the new clinical variables are reported for all 6 visits) \* merge the new dataset with the old
 
+``` r
+visit1_df <- merged_data %>% 
+  select(SUBJ, VISIT, ADOS, MullenRaw, ExpressiveLangRaw, Socialization) %>% 
+  filter(VISIT == "1")
+
+colnames(visit1_df)[3] <- "ADOSv1"
+colnames(visit1_df)[4] <- "MullenRawv1"
+colnames(visit1_df)[5] <- "ExpressiveLangRawv1"
+colnames(visit1_df)[6] <- "Socializationv1"
+
+visit1_df <- select(visit1_df, -c(VISIT))
+
+
+merged_data_2 <- merge(visit1_df, merged_data, all = T)
+```
+
 2g. Final touches
 
 Now we want to \* anonymize our participants (they are real children!). \* make sure the variables have sensible values. E.g. right now gender is marked 1 and 2, but in two weeks you will not be able to remember, which gender were connected to which number, so change the values from 1 and 2 to F and M in the gender variable. For the same reason, you should also change the values of Diagnosis from A and B to ASD (autism spectrum disorder) and TD (typically developing). Tip: Try taking a look at ifelse(), or google "how to rename levels in R". \* Save the data set using into a csv file. Hint: look into write.csv()
+
+``` r
+merged_data_2$Gender <- ifelse(merged_data_2$Gender == 2, "F", "M")
+
+anonymiseColumns <- function(df, colIDs) {
+    id <- if(is.character(colIDs)) match(colIDs, names(df)) else colIDs
+    for(id in colIDs) {
+        prefix <- sample(LETTERS, 1)
+        suffix <- as.character(as.numeric(as.factor(df[[id]])))
+        df[[id]] <- paste(prefix, suffix, sep="")
+    }
+    names(df)[id] <- paste("V", id, sep="")
+    df
+}
+
+
+## Anonymise it
+merged_data_2 <- anonymiseColumns(merged_data_2, c(1))
+
+merged_data_2$Diagnosis <- ifelse(merged_data_2$Diagnosis == "A", "ASD", "TD")
+
+
+write.csv(merged_data_2, file = "Assignment 1 - Preprocessed data.csv")
+```
 
 1.  BONUS QUESTIONS The aim of this last section is to make sure you are fully fluent in the tidyverse. Here's the link to a very helpful book, which explains each function: <http://r4ds.had.co.nz/index.html>
 
