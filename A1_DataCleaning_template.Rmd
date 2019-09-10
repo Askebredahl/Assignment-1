@@ -2,9 +2,7 @@
 title: "Assignment 1 - Data Cleaning - Instructions"
 author: "Aske Bredahl NIelsen"
 date: "[FILL IN THE DATE]"
-output:   
-  md_document:
-    variant: markdown_github
+output: html_document
 ---
 
 # Assignment 1, Language development in Autism Spectrum Disorder (ASD) - Brushing up your code skills
@@ -63,7 +61,8 @@ If you're not in a project in Rstudio, make sure to set your working directory h
 If you created an RStudio project, then your working directory (the directory with your data and code for these assignments) is the project directory.
 
 ```{r}
-pacman::p_load(tidyverse,janitor)
+library(pacman)
+pacman::p_load(tidyverse, janitor)
 ```
 
 Load the three data sets, after downloading them from dropbox and saving them in your working directory:
